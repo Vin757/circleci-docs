@@ -208,9 +208,11 @@ workflows:
 [#generate-a-config-file-based-on-modified-files]
 == Generate a configuration file based on modified files
 
+TIP: This project is available on link:https://github.com/CircleCI-Public/dynamic-configuration-examples/tree/generate-config-file-main[GitHub] and you can see it building on link:https://app.circleci.com/pipelines/github/CircleCI-Public/dynamic-configuration-examples?branch=generate-config-file-main[CircleCI].
+
 For this example, consider a project that includes:
 
-* Separate directories for code (`src/`) and docs (`doc/`).
+* Separate directories for code (`src/`) and docs (`docs/`).
 * A setup configuration, `config.yml`.
 * Separate configuration files for building the code and the docs, `code-config.yml` and `docs-config.yml`.
 * A `shared-config.yml` file that defines shared jobs to be used when building the code and the docs.
@@ -228,7 +230,7 @@ Each configuration file is explained in the following sections.
 │   ├── no-updates.yml
 │   └── shared-config.yml
 ├── README.md
-├── doc
+├── docs
 │   └── my-docs.txt
 └── src
     └── my-code.txt
@@ -241,7 +243,7 @@ In this example, the setup configuration includes a single job referenced from t
 
 Under the hood the following steps are taken when the pipeline is triggered:
 
-* A script runs to check for modified files in a commit against a base branch (in this example, the default, `main`).
+* A script runs to check for modified files in a commit against a base branch (in this example, the default, `generate-config-file-main`).
 * A continuation configuration is generated using the relevant config files from the project, and the pipeline parameter values are set.
 * The pipeline is continued using the continuation configuration.
 
@@ -260,20 +262,20 @@ workflows:
   setup-workflow:
     jobs:
       - path-filtering/filter:
-          base-revision: main
+          base-revision: generate-config-file-main
           config-path: .circleci/no-updates.yml
           mapping: | # The mapping will be used to generate the dynamic configuration for all conditions that match.
             .* always-continue true .circleci/shared-config.yml
             src/.* build-code true .circleci/code-config.yml
-            doc/.* build-docs true .circleci/docs-config.yml
+            docs/.* build-docs true .circleci/docs-config.yml
 ----
 
-[#shared-jobs-1]
-=== Shared jobs
+[#shared-configuration-1]
+=== Shared configuration
 
 In the event of changes to _any_ file in the repository (`.*`) the `shared-config.yml` configuration is included in the continuation configuration. The only time `shared-config.yml` will not be used is on a commit that contains no changes.
 
-NOTE: `shared-config.yml` is a partial configuration and contains only shared parameters and jobs, not workflows. This is because these jobs will be used along with either the `code-config.yml` or `docs-config.yml` configs, both of which include workflows that orchestrate these shared jobs. Using this kind of set up you can include anything that should _always_ run in the shared configuration, including workflows that should always run.
+NOTE: `shared-config.yml` is designed to be used either on its own or along with other partial configurations. You can include anything that should _always_ run in the shared configuration.. `code-config.yml` or `docs-config.yml` include workflows that orchestrate the shared jobs defined in `shared-config.yml` and they can be combined together to create the required pipeline for a set of changes.
 
 [,yml]
 ----
@@ -304,12 +306,23 @@ jobs:
       - image: cimg/base:stable
     steps:
       - run: echo "Running tests"
+
+  any-change:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - run: echo "This is a shared job that will reun for any change in the project."
+
+workflows:
+  run-on-any-change:
+    jobs:
+      - any-change
 ----
 
 [#directory-specific-config-1]
 === Directory-specific configuration
 
-The config files for building the separate directories, `src/` and `/doc`, contain build jobs for the content and workflows to orchestrate the build and shared jobs described above. The `lint` job is used for both, and the `test` job is only used when the code is built, not the docs.
+The config files for building the separate directories, `src/` and `/docs`, contain build jobs for the content and workflows to orchestrate the build and shared jobs described above. The `lint` job is used for both, and the `test` job is only used when the code is built, not the docs.
 
 [#code-config-1]
 ==== `code-config.yml`
@@ -393,9 +406,11 @@ workflows:
 [#pack-generate-validate]
 == Pack, generate, and validate a configuration file for pipeline continuation
 
+TIP: This project is available on link:https://github.com/CircleCI-Public/dynamic-configuration-examples/tree/pack-validate-continue-main[GitHub] and you can see it building on link:https://app.circleci.com/pipelines/github/CircleCI-Public/dynamic-configuration-examples?branch=pack-validate-continue-main[CircleCI].
+
 For this example, consider a project that includes:
 
-* Separate directories for code (`src/`) and docs (`doc/`).
+* Separate directories for code (`src/`) and docs (`docs/`).
 * A setup configuration, `config.yml`.
 * Separate configuration files for building the code and the docs, `code-config.yml` and `docs-config.yml`.
 * A `shared/` configuration directory containing our shared jobs in separate YAML files. This is used to generate `shared-config.yml` using the xref:how-to-use-the-circleci-local-cli#packing-a-config[CircleCI CLI command] `circleci config pack`
@@ -411,14 +426,20 @@ For this example, consider a project that includes:
 │   ├── no-updates.yml
 │   ├── shared
 │   │   └── jobs
+│   │       ├── any-change.yml
 │   │       ├── lint.yml
 │   │       └── test.yml
+│   │   └── workflows
+│   │       ├── run-on-any-change.yml
+|   |       └── @shared.yml
 ├── README.md
-├── doc
+├── docs
 │   └── my-docs.txt
 └── src
     └── my-code.txt
 ----
+
+NOTE: `@shared.yml` exists to provide the required `version` key for the config in the event that a pipeline is triggered on a change outside the `src/` or `docs/` directories.
 
 [#setup-config-2]
 === Setup configuration
@@ -474,12 +495,12 @@ jobs:
 
       # The mapping will be used to generate the dynamic configuration for all conditions that match.
       - path-filtering/set-parameters:
-          base-revision: main
+          base-revision: pack-validate-continue-main
           config-path: .circleci/no-updates.yml
           mapping: |
             .* always-continue true .circleci/shared-config.yml
             src/.* build-code true .circleci/code-config.yml
-            doc/.* build-docs true .circleci/docs-config.yml
+            docs/.* build-docs true .circleci/docs-config.yml
 
       # Generate the dynamic configuration based on the parameters set in the previous step.
       - path-filtering/generate-config
@@ -499,12 +520,34 @@ workflows:
       - setup
 ----
 
-[#shared-jobs-2]
-=== Shared jobs
+[#shared-configuration]
+=== Shared configuration
 
-In this example, shared jobs, `lint` and `test`, are stored in individual YAML files using a directory structure compatible with the `circleci config pack` command. Jobs are stored in a `jobs` folder, commands stored in a `commands` folder, and so on. These files can be used in the setup stage of our dynamic configuration to generate a shared configuration by "packing" the relevant components together.
+In this example, shared configuration elements are stored in individual YAML files using a directory structure compatible with the `circleci config pack` command.
+
+Jobs are stored in a `jobs` folder, workflows stored in a `workflows` folder, and so on. These files can be used in the setup stage of our dynamic configuration to generate a shared configuration by "packing" the relevant components together.
 
 TIP: When packing a config using `circleci config pack`, the component names are not included in the configuration files, they are taken from the file names.
+
+==== `shared/workflows/run-on-any-change.yml`
+
+This workflow runs the job `any-change` on all pipelines triggered by a change in the repository, even if that change is outside of the `/src` or `/docs` directories.
+
+[,yml]
+----
+jobs:
+  - any-change
+----
+
+==== `shared/jobs/any-change.yml`
+
+[,yml]
+----
+docker:
+  - image: cimg/base:stable
+steps:
+  - run: echo "This is a shared job that will run for any change in the project."
+----
 
 [#lint]
 ==== `shared/jobs/lint.yml`
@@ -531,7 +574,7 @@ steps:
 [#directory-specific-config-2]
 === Directory-specific configuration
 
-The config files for building the separate directories, `src/` and `/doc`, contain build jobs for the content and workflows to orchestrate the build and shared jobs described above. The `lint` job is used for both, and the `test` job is only used when the code is built, not the docs.
+The config files for building the separate directories, `src/` and `/docs`, contain build jobs for the content and workflows to orchestrate the build and shared jobs described above. The `lint` job is used for both, and the `test` job is only used when the code is built, not the docs.
 
 [#code-config-2]
 ==== `code-config.yml`
